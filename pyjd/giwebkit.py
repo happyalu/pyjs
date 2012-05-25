@@ -75,7 +75,7 @@ def _gi_setup():
         def __delete__(self, instance):
             pass
 
-    for cls in [WebKit.DOMDocument, WebKit.DOMHTMLElement, WebKit.DOMCSSStyleDeclaration]:
+    for cls in [WebKit.DOMDocument, WebKit.DOMHTMLElement, WebKit.DOMEvent, WebKit.DOMCSSStyleDeclaration]:
 
         def _closure(cls, orig):
 
@@ -84,7 +84,7 @@ def _gi_setup():
                 f = '__getattr__'
                 alt = re_caps.sub('_\\1', name).lower()
                 print f, ':', id(self), self.__class__.__name__, name, alt
-                traceback.print_stack(inspect.currentframe().f_back, 1)
+                #traceback.print_stack(inspect.currentframe().f_back, 1)
                 try:
                     altattr = getattr(cls, alt)
                     setattr(cls, name, altattr)
@@ -130,7 +130,7 @@ class Callback(object):
         self.sender = sender
         self.cb = cb
         self.boolparam = boolparam
-    def _callback(self, event):
+    def _callback(self, sender, event, data):
         #print "callback", self.sender, self.cb
         try:
             return self.cb(self.sender, event, self.boolparam)
@@ -149,6 +149,7 @@ class Browser(object):
         self.height = height
         self.application = application
         self.appdir = appdir
+        self.listeners = dict()
 
     def load_app(self):
 
@@ -316,7 +317,9 @@ class Browser(object):
 
     def _addWindowEventListener(self, event_name, cb):
         cb = Callback(self, cb, True)
-        self._wnd.add_event_listener(event_name, cb._callback, False, None)
+        listener = WebKit.dom_create_event_listener(cb._callback, None)
+        self._wnd.add_event_listener(event_name, listener, False)
+        self.listeners[listener] = self._wnd
 
     def _addXMLHttpRequestEventListener(self, element, event_name, cb):
         #print "add XMLHttpRequest", element, event_name, cb
@@ -326,9 +329,10 @@ class Browser(object):
 
     def _addEventListener(self, element, event_name, cb):
         #    element._callbacks.append(cb)
-        cb = Callback(element, cb, True)
-        #print "addEventListener", element, event_name, cb
-        element.add_event_listener(event_name, cb._callback, False, None)
+        cb = Callback(element, cb, False)
+        listener = WebKit.dom_create_event_listener(cb._callback, None)
+        element.add_event_listener(event_name, listener, False)
+        self.listeners[listener] = element
 
     def _toplevel_delete_event_cb(self, window, event):
         while gtk.events_pending():
